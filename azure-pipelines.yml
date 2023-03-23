@@ -4,16 +4,35 @@
 # https://aka.ms/yaml
 
 trigger:
-- master
+  branches:
+    include:
+    - master
+    - releases/*
+  paths:
+  # trigger only when the csproj file has changed.
+    include:
+    - "*.csproj"
 
 pool:
   vmImage: ubuntu-latest
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+variables:
+  - name: csproj_packages
+    value: ""
+  - name: deprecated_packages
+    value: Newtonsoft.Json
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+jobs:
+  - job: CheckDeprecatedNugetPackages
+    displayName: 'Check for deprecated nuget packages'
+    steps:
+    - powershell: |
+        $local_csproj_packages = Get-Content *.csproj | Find "<PackageReference Include"
+        Write-Host "##vso[task.setvariable variable=csproj_packages;]$local_csproj_packages"
+
+    - bash: |
+        for package in ${{ variables.deprecated_packages }}; do
+          if grep -q $package $csproj_packages; then
+            echo "Warning: Deprecated package $package should not be used."
+          fi
+        done
